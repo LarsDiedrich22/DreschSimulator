@@ -59,7 +59,7 @@ const restartButton = document.getElementById("restart-button") as HTMLButtonEle
 
 // Combine sprite
 const combineImage = new Image();
-combineImage.src = "draufsicht-des-mähdreschers-133656179.jpg.png";
+combineImage.src = "draufsicht-des-maehdreschers-133656179.jpg.png";
 let combineImageReady = false;
 combineImage.onload = () => {
   combineImageReady = true;
