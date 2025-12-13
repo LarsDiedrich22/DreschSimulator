@@ -116,7 +116,7 @@ let tiles = new Uint8Array(TOTAL_TILES);
 let harvestedTiles = 0;
 
 const combine = {
-  position: { x: 10, y: FIELD_HEIGHT * 0.5 },
+  position: { x: 10, y: FIELD_HEIGHT * 1.5},
   prevPosition: { x: 0, y: FIELD_HEIGHT * 0.5 },
   angle: 0,
   headerActive: false
