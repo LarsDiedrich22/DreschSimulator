@@ -116,8 +116,8 @@ let tiles = new Uint8Array(TOTAL_TILES);
 let harvestedTiles = 0;
 
 const combine = {
-  position: { x: FIELD_WIDTH * 0.15, y: FIELD_HEIGHT * 0.5 },
-  prevPosition: { x: FIELD_WIDTH * 0.15, y: FIELD_HEIGHT * 0.5 },
+  position: { x: 10, y: FIELD_HEIGHT * 0.5 },
+  prevPosition: { x: 0, y: FIELD_HEIGHT * 0.5 },
   angle: 0,
   headerActive: false
 };
@@ -165,7 +165,7 @@ let lastAngleSnapshot = 0;
 function resetGame() {
   tiles = new Uint8Array(TOTAL_TILES);
   harvestedTiles = 0;
-  combine.position = { x: -120, y: FIELD_HEIGHT * 0.5 }; // start outside field
+  combine.position = { x: 0, y: FIELD_HEIGHT * 0.5 }; // start on the field edge
   combine.prevPosition = { ...combine.position };
   combine.angle = 0;
   combine.headerActive = false;
