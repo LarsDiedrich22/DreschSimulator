@@ -70,10 +70,10 @@ if (combineImage.complete) combineImageReady = true;
 
 // Constants based on the design document
 const TILE_SIZE = 8; // px
-const METERS_PER_TILE = 2;
+const METERS_PER_TILE = 0.01; // 1 cm of wheat field per tile
 const PIXELS_PER_METER = TILE_SIZE / METERS_PER_TILE;
-const FIELD_WIDTH_TILES = 200;
-const FIELD_HEIGHT_TILES = 200;
+const FIELD_WIDTH_TILES = 70; // 70 cm length
+const FIELD_HEIGHT_TILES = 70; // 70 cm width
 const FIELD_WIDTH = FIELD_WIDTH_TILES * TILE_SIZE;
 const FIELD_HEIGHT = FIELD_HEIGHT_TILES * TILE_SIZE;
 const TOTAL_TILES = FIELD_WIDTH_TILES * FIELD_HEIGHT_TILES;
@@ -87,8 +87,9 @@ const HEADER_DEPTH_TILES = 3.5;
 const HEADER_OFFSET = TILE_SIZE * 4;
 const HEADER_VISUAL_SHIFT_TILES = 3; // push visible cutter forward
 
-const COMBINE_SPEED_MPS = 8.5; // tuned for larger header and feel
-const COMBINE_SPEED_PPS = COMBINE_SPEED_MPS * PIXELS_PER_METER;
+const TARGET_COMBINE_SPEED_PPS = 34; // keep prior on-screen speed with the smaller 70 cm field
+const COMBINE_SPEED_MPS = TARGET_COMBINE_SPEED_PPS / PIXELS_PER_METER;
+const COMBINE_SPEED_PPS = TARGET_COMBINE_SPEED_PPS;
 const COMBINE_SIZE = { w: 140, h: 220 }; // scaled for sprite
 const WORLD_MARGIN = 400; // allow driving beyond field
 const TURN_SPEED_DEG_PER_SEC = 120; // smoother turning
@@ -99,13 +100,14 @@ const TURN_EASE_MULTIPLIER = 0.4;
 
 const TANK_CAPACITY = 13; // tons (~13,000 L)
 const TANK_INFLOW_RATE = 0.9; // t per sim minute
-const UNLOAD_RATE = 4; // t per sim minute
+const UNLOAD_RATE = 4; // t per sim minute base
+const UNLOAD_RATE_ATTACHED_MULTIPLIER = 1.2; // +20% when tractor is unloading alongside
 const TANK_MIN_CALL_THRESHOLD = 0.6 * TANK_CAPACITY;
 
-const BATTERY_CAPACITY_KWH = 210; // tuned so a full battery lasts ~90s under harvest load
-const BATTERY_DRAIN_HARVEST = 35; // kWh per sim minute (faster drain)
-const BATTERY_DRAIN_DRIVE = 10;
-const BATTERY_DRAIN_IDLE = 2;
+const BATTERY_CAPACITY_KWH = 210; // tuned so 100% → 20% lasts ~3m40 real while harvesting
+const BATTERY_DRAIN_HARVEST = 11.45; // kWh per sim minute (targets ~3:40 real to reach 20%)
+const BATTERY_DRAIN_DRIVE = 3.3;
+const BATTERY_DRAIN_IDLE = 0.7;
 
 const TRACTOR_COOLDOWN_SIM_MIN = 2;
 const TRACTOR_ARRIVAL_SIM_MIN = 1.25; // faster arrival (previously 2.5)
@@ -115,6 +117,7 @@ const TRAILER_CAPACITY = 20; // t visual only
 const MIN_TRACTOR_GAP = Math.max(40, TRACTOR_OFFSET - TILE_SIZE); // prevent overlap
 const TRACTOR_HEADING_OFFSET = 0; // align tractor heading with combine
 const TRACTOR_SPEED_MULTIPLIER = 1.25;
+const TRACTOR_ALONGSIDE_SPEED_MULTIPLIER = 0.6; // reduce combine speed while unloading so convoy can stay matched
 
 const START_POSITION = {
   x: FIELD_WIDTH * 0.5,
@@ -978,7 +981,8 @@ function updateTractor(simDeltaMinutes: number) {
     tractor.position.x += (tractor.target.x - tractor.position.x) * 0.4;
     tractor.position.y += (tractor.target.y - tractor.position.y) * 0.4;
     tractor.heading = lerpAngle(tractor.heading, combine.angle + TRACTOR_HEADING_OFFSET, 0.25);
-    const unloadDelta = UNLOAD_RATE * simDeltaMinutes;
+    const unloadRate = UNLOAD_RATE * UNLOAD_RATE_ATTACHED_MULTIPLIER;
+    const unloadDelta = unloadRate * simDeltaMinutes;
     if (tank.current > 0) {
       tank.current = Math.max(0, tank.current - unloadDelta);
       tractor.trailerFill = Math.min(TRAILER_CAPACITY, tractor.trailerFill + unloadDelta);
@@ -1136,7 +1140,7 @@ function update(deltaSeconds: number) {
 
   if (moveAmount !== 0) {
     moving = true;
-    const speedMultiplier = batterySwap.active ? 0.5 : 1;
+    const speedMultiplier = (batterySwap.active ? 0.5 : 1) * (tractor.state === "unloading" ? TRACTOR_ALONGSIDE_SPEED_MULTIPLIER : 1);
     const speed = COMBINE_SPEED_PPS * (moveAmount > 0 ? 1 : REVERSE_SPEED_FACTOR) * speedMultiplier;
     const forward = { x: Math.cos(combine.angle), y: Math.sin(combine.angle) };
     combine.position.x += forward.x * speed * deltaSeconds * Math.sign(moveAmount);
