@@ -100,7 +100,7 @@ const TURN_EASE_MULTIPLIER = 0.4;
 
 const TANK_CAPACITY = 13; // tons (~13,000 L)
 const TANK_INFLOW_RATE = 0.9; // t per sim minute
-const UNLOAD_RATE = 4; // t per sim minute base
+const UNLOAD_RATE = 5.42; // t per sim minute base (x1.2 alongside = ~6.5 → ~30s real to empty 13 t)
 const UNLOAD_RATE_ATTACHED_MULTIPLIER = 1.2; // +20% when tractor is unloading alongside
 const TANK_MIN_CALL_THRESHOLD = 0.6 * TANK_CAPACITY;
 
@@ -117,7 +117,7 @@ const TRAILER_CAPACITY = 20; // t visual only
 const MIN_TRACTOR_GAP = Math.max(40, TRACTOR_OFFSET - TILE_SIZE); // prevent overlap
 const TRACTOR_HEADING_OFFSET = 0; // align tractor heading with combine
 const TRACTOR_SPEED_MULTIPLIER = 1.25;
-const TRACTOR_ALONGSIDE_SPEED_MULTIPLIER = 0.6; // reduce combine speed while unloading so convoy can stay matched
+const TRACTOR_ALONGSIDE_SPEED_MULTIPLIER = 0.5; // reduce combine speed while unloading so convoy can stay matched
 
 const START_POSITION = {
   x: FIELD_WIDTH * 0.5,
