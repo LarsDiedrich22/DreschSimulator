@@ -128,6 +128,39 @@ canvas#game {
   line-height: 1.5;
 }
 
+.battery-zone {
+  position: fixed;
+  top: 120px;
+  right: 14px;
+  width: 260px;
+  padding: 12px;
+  display: grid;
+  gap: 6px;
+  border-left: 3px solid transparent;
+}
+
+.battery-zone.attention {
+  border-color: #50ee86;
+  box-shadow: 0 0 20px rgba(80, 238, 134, 0.25);
+}
+
+.battery-zone-title {
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.battery-zone-row {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+}
+
+.battery-zone-message {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #b1c6d8;
+}
+
 .controls {
   position: fixed;
   top: 220px;

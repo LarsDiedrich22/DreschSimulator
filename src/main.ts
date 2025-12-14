@@ -56,6 +56,10 @@ const endScreen = document.getElementById("end-screen")!;
 const endSummary = document.getElementById("end-summary")!;
 const endLog = document.getElementById("end-log")!;
 const restartButton = document.getElementById("restart-button") as HTMLButtonElement;
+const batteryZonePanel = document.getElementById("battery-zone-panel") as HTMLElement;
+const batteryZoneStatusEl = document.getElementById("battery-zone-status")!;
+const batteryZoneTimerEl = document.getElementById("battery-zone-timer")!;
+const batteryZoneMessageEl = document.getElementById("battery-zone-message")!;
 
 // Combine sprite
 const combineImage = new Image();
@@ -111,13 +115,25 @@ const TRACTOR_LEAVE_SIM_MIN = 1.5;
 const TRACTOR_OFFSET = 70;
 const TRAILER_CAPACITY = 20; // t visual only
 
+// Replacement pad sits left of the starting position, just outside the field
+const COMBINE_START: Vec2 = { x: 0, y: FIELD_HEIGHT * 0.5 };
+const BATTERY_ZONE_POSITION: Vec2 = { x: COMBINE_START.x - 220, y: COMBINE_START.y - 40 };
+const BATTERY_ZONE_RADIUS = 140;
+const BATTERY_SWAP_TRIGGER_PERCENT = 20;
+const BATTERY_SWAP_DURATION_SECONDS = 30;
+const BATTERY_SWAP_MESSAGES = [
+  "Replacing the previous battery.",
+  "Empty battery is being removed",
+  "New battery is being inserted."
+];
+
 
 let tiles = new Uint8Array(TOTAL_TILES);
 let harvestedTiles = 0;
 
 const combine = {
-  position: { x: 0, y: FIELD_HEIGHT * 0.5},
-  prevPosition: { x: 0, y: FIELD_HEIGHT * 0.5 },
+  position: { ...COMBINE_START },
+  prevPosition: { ...COMBINE_START },
   angle: 0,
   headerActive: false
 };
@@ -152,6 +168,15 @@ let swapEvents: SwapEvent[] = [];
 let markers: SwapMarker[] = [];
 let swapCounter = 0;
 
+const batterySwap = {
+  active: false,
+  elapsed: 0,
+  remaining: 0,
+  stageIndex: 0
+};
+
+let batteryLowPrompted = false;
+
 const inputState: Record<string, boolean> = {};
 
 let gameState: GameState = "tutorial";
@@ -165,7 +190,7 @@ let lastAngleSnapshot = 0;
 function resetGame() {
   tiles = new Uint8Array(TOTAL_TILES);
   harvestedTiles = 0;
-  combine.position = { x: 0, y: FIELD_HEIGHT * 0.5 }; // start on the field edge
+  combine.position = { ...COMBINE_START }; // start on the field edge
   combine.prevPosition = { ...combine.position };
   combine.angle = 0;
   combine.headerActive = false;
@@ -184,6 +209,11 @@ function resetGame() {
   swapCounter = 0;
   swapEvents = [];
   markers = [];
+  batterySwap.active = false;
+  batterySwap.elapsed = 0;
+  batterySwap.remaining = 0;
+  batterySwap.stageIndex = 0;
+  batteryLowPrompted = false;
   elapsedRealSeconds = 0;
   elapsedSimSeconds = 0;
   turnEaseTimer = 0;
@@ -263,6 +293,7 @@ function setTileHarvested(x: number, y: number) {
 
 function handleInputToggle(key: string) {
   if (gameState !== "running") return;
+  if (batterySwap.active) return;
   if (key === " ") {
     if (!harvestBlocked()) {
       combine.headerActive = !combine.headerActive;
@@ -277,6 +308,7 @@ function handleInputToggle(key: string) {
 }
 
 function harvestBlocked() {
+  if (batterySwap.active) return true;
   return tank.current >= tank.capacity - 0.001 && tractor.state !== "unloading";
 }
 
@@ -330,6 +362,12 @@ function batteryPercent() {
 
 function tankPercent() {
   return clamp((tank.current / tank.capacity) * 100, 0, 100);
+}
+
+function isInBatteryZone(position: Vec2) {
+  const dx = position.x - BATTERY_ZONE_POSITION.x;
+  const dy = position.y - BATTERY_ZONE_POSITION.y;
+  return Math.hypot(dx, dy) <= BATTERY_ZONE_RADIUS;
 }
 
 function renderTile(x: number, y: number, harvested: boolean, camX: number, camY: number) {
@@ -473,6 +511,128 @@ function drawMarkers(camX: number, camY: number, now: number) {
   });
 }
 
+function drawRoundedRect(x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function drawBatteryBlock(x: number, y: number, scale = 1) {
+  ctx.save();
+  ctx.translate(x, y);
+  const width = 78 * scale;
+  const height = 34 * scale;
+  const radius = 8 * scale;
+  ctx.fillStyle = "#9ca4ad";
+  drawRoundedRect(-width / 2, -height / 2, width, height, radius);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(0,0,0,0.35)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = "#c8d0da";
+  ctx.fillRect(-width / 2 + 8 * scale, -height / 2 - 4 * scale, 12 * scale, 6 * scale);
+  ctx.fillRect(width / 2 - 20 * scale, -height / 2 - 4 * scale, 12 * scale, 6 * scale);
+  ctx.fillStyle = "#50ee86";
+  ctx.beginPath();
+  ctx.moveTo(-6 * scale, -4 * scale);
+  ctx.lineTo(0, -14 * scale);
+  ctx.lineTo(8 * scale, -4 * scale);
+  ctx.lineTo(2 * scale, 12 * scale);
+  ctx.lineTo(-6 * scale, 4 * scale);
+  ctx.closePath();
+  ctx.fill();
+  ctx.font = `${10 * scale}px "Inter", "Segoe UI", system-ui, sans-serif`;
+  ctx.textBaseline = "middle";
+  ctx.fillText("Battery", -width / 2 + 10 * scale, height / 2 - 8 * scale);
+  ctx.restore();
+}
+
+function drawBatteryZone(camX: number, camY: number, now: number) {
+  const screenX = BATTERY_ZONE_POSITION.x - camX;
+  const screenY = BATTERY_ZONE_POSITION.y - camY;
+  const pulse = (Math.sin(now / 400) + 1) / 2;
+  const highlight = batterySwap.active || batteryLowPrompted;
+
+  ctx.save();
+  ctx.translate(screenX, screenY);
+  ctx.fillStyle = "rgba(16, 28, 36, 0.85)";
+  drawRoundedRect(-BATTERY_ZONE_RADIUS, -BATTERY_ZONE_RADIUS, BATTERY_ZONE_RADIUS * 2, BATTERY_ZONE_RADIUS * 2, 24);
+  ctx.fill();
+  ctx.strokeStyle = `rgba(80, 238, 134, ${highlight ? 0.55 + 0.25 * pulse : 0.35})`;
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
+  ctx.setLineDash([12, 10]);
+  ctx.strokeStyle = `rgba(255, 255, 255, ${0.28 + 0.18 * pulse})`;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, 0, BATTERY_ZONE_RADIUS - 18, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.strokeStyle = "rgba(73, 230, 122, 0.8)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-60, 0);
+  ctx.lineTo(60, 0);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(0, -60);
+  ctx.lineTo(0, 60);
+  ctx.stroke();
+
+  ctx.font = "bold 15px \"Inter\", \"Segoe UI\", system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = `rgba(80, 238, 134, ${0.5 + pulse * 0.35})`;
+  ctx.fillText("Battery Pad", 0, -BATTERY_ZONE_RADIUS + 24);
+
+  // Spare batteries
+  drawBatteryBlock(92, -30, 0.9);
+  drawBatteryBlock(114, 18, 0.9);
+  drawBatteryBlock(76, 52, 0.9);
+
+  // Slot outline
+  ctx.strokeStyle = "rgba(0,0,0,0.35)";
+  ctx.lineWidth = 2;
+  drawRoundedRect(-58, -20, 116, 40, 10);
+  ctx.stroke();
+
+  const stageLength = BATTERY_SWAP_DURATION_SECONDS / BATTERY_SWAP_MESSAGES.length;
+  const localProgress = batterySwap.active
+    ? clamp((batterySwap.elapsed - batterySwap.stageIndex * stageLength) / stageLength, 0, 1)
+    : 0;
+
+  let slotBatteryPos = { x: 0, y: -4 };
+  if (batterySwap.active) {
+    if (batterySwap.stageIndex === 0) {
+      slotBatteryPos.y = -6 - localProgress * 14;
+    } else if (batterySwap.stageIndex === 1) {
+      slotBatteryPos.x = -20 - localProgress * 60;
+      slotBatteryPos.y = -10 + localProgress * 22;
+    } else {
+      const incomingX = 80 * (1 - localProgress);
+      const incomingY = -12 + localProgress * 10;
+      drawBatteryBlock(incomingX, incomingY, 0.95);
+      slotBatteryPos.x = 40 * (1 - localProgress) - 6;
+      slotBatteryPos.y = -14 + localProgress * 14;
+    }
+  } else if (batteryLowPrompted) {
+    slotBatteryPos.y = -6 + Math.sin(now / 240) * 4;
+  }
+
+  drawBatteryBlock(slotBatteryPos.x, slotBatteryPos.y, 1.05);
+  ctx.restore();
+}
+
 function drawHud(now: number) {
   const fieldPercent = (harvestedTiles / TOTAL_TILES) * 100;
   fieldProgressEl.textContent = `${fieldPercent.toFixed(1)} %`;
@@ -485,7 +645,38 @@ function drawHud(now: number) {
   timeDisplayEl.textContent = `${formatTime(elapsedRealSeconds)} / ${formatSimTime(elapsedSimSeconds)}`;
   tractorStatusEl.textContent = tractorStatusText();
   statusMessageEl.textContent = statusMessage;
-  messagesEl.textContent = batteryPct <= 0 ? "Battery would be empty in a real scenario (no swap performed)." : "";
+  const messages: string[] = [];
+  if (batterySwap.active) {
+    messages.push(`${currentSwapMessage()} (${formatCountdown(batterySwap.remaining)})`);
+  } else if (batteryPct <= BATTERY_SWAP_TRIGGER_PERCENT) {
+    messages.push("Battery at 20% — drive to the replacement zone left of the start point.");
+  }
+  if (batteryPct <= 0) {
+    messages.push("Battery would be empty in a real scenario (no swap performed).");
+  }
+  messagesEl.innerHTML = messages.join("<br>");
+  updateBatteryZonePanel(batteryPct);
+}
+
+function updateBatteryZonePanel(batteryPct: number) {
+  const inZone = isInBatteryZone(combine.position);
+  const awaitingSwap = batteryLowPrompted && !batterySwap.active;
+  batteryZoneStatusEl.textContent = inZone ? "Am Ersatzbereich" : "Links vom Startpunkt außerhalb des Felds";
+  if (batterySwap.active) {
+    batteryZoneTimerEl.textContent = `${formatCountdown(batterySwap.remaining)} (${Math.ceil(batterySwap.remaining)} s)`;
+    batteryZoneMessageEl.textContent = currentSwapMessage();
+    batteryZonePanel.classList.add("attention");
+  } else {
+    batteryZoneTimerEl.textContent = "--";
+    if (awaitingSwap && inZone) {
+      batteryZoneMessageEl.textContent = "Stillstehen: Der Batteriewechsel startet jetzt automatisch.";
+    } else if (batteryPct <= BATTERY_SWAP_TRIGGER_PERCENT) {
+      batteryZoneMessageEl.textContent = "Batterie bei 20 % – fahre zum markierten Pad links des Startpunkts.";
+    } else {
+      batteryZoneMessageEl.textContent = "Pad bereit für den nächsten Wechsel.";
+    }
+    batteryZonePanel.classList.toggle("attention", awaitingSwap || batteryPct <= BATTERY_SWAP_TRIGGER_PERCENT);
+  }
 }
 
 function consumptionLabel() {
@@ -522,6 +713,13 @@ function formatSimTime(simSeconds: number) {
   const simMins = Math.floor(simSeconds / 60);
   const simSecs = Math.floor(simSeconds % 60);
   return `${String(simMins).padStart(2, "0")}:${String(simSecs).padStart(2, "0")} sim`;
+}
+
+function formatCountdown(seconds: number) {
+  const secs = Math.max(0, Math.ceil(seconds));
+  const mins = Math.floor(secs / 60);
+  const rem = secs % 60;
+  return `${String(mins).padStart(2, "0")}:${String(rem).padStart(2, "0")}`;
 }
 
 function updateSwapList() {
@@ -628,6 +826,44 @@ function updateBattery(simDeltaMinutes: number, isHarvesting: boolean, isMoving:
   battery.current = Math.max(0, battery.current - drain * simDeltaMinutes);
 }
 
+function startBatterySwap() {
+  batterySwap.active = true;
+  batterySwap.elapsed = 0;
+  batterySwap.remaining = BATTERY_SWAP_DURATION_SECONDS;
+  batterySwap.stageIndex = 0;
+  combine.headerActive = false;
+  statusMessage = BATTERY_SWAP_MESSAGES[0];
+}
+
+function updateBatterySwap(deltaSeconds: number) {
+  if (!batterySwap.active) return;
+  batterySwap.elapsed += deltaSeconds;
+  batterySwap.remaining = Math.max(0, BATTERY_SWAP_DURATION_SECONDS - batterySwap.elapsed);
+  const segmentLength = BATTERY_SWAP_DURATION_SECONDS / BATTERY_SWAP_MESSAGES.length;
+  const newStage = Math.min(BATTERY_SWAP_MESSAGES.length - 1, Math.floor(batterySwap.elapsed / segmentLength));
+  if (newStage !== batterySwap.stageIndex) {
+    batterySwap.stageIndex = newStage;
+    statusMessage = BATTERY_SWAP_MESSAGES[newStage];
+  }
+  if (batterySwap.remaining <= 0) {
+    finishBatterySwap();
+  }
+}
+
+function finishBatterySwap() {
+  batterySwap.active = false;
+  batterySwap.elapsed = 0;
+  batterySwap.remaining = 0;
+  batterySwap.stageIndex = 0;
+  battery.current = battery.capacity;
+  batteryLowPrompted = false;
+  statusMessage = "Battery replaced and ready.";
+}
+
+function currentSwapMessage() {
+  return BATTERY_SWAP_MESSAGES[batterySwap.stageIndex] || BATTERY_SWAP_MESSAGES[0];
+}
+
 function sweepHarvest(simDeltaMinutes: number, from: Vec2, to: Vec2) {
   if (!(combine.headerActive && !harvestBlocked())) {
     return { harvestedTiles: 0, inCrop: false, harvestedSamples: 0, samples: 0 };
@@ -705,6 +941,8 @@ function update(deltaSeconds: number) {
   const simDeltaSeconds = deltaSeconds * SIM_SECONDS_PER_REAL_SECOND;
   const simDeltaMinutes = simDeltaSeconds / 60;
   elapsedSimSeconds += simDeltaSeconds;
+  updateBatterySwap(deltaSeconds);
+  const swapActive = batterySwap.active;
 
   // Movement
   const up = inputState["ArrowUp"] || inputState["KeyW"];
@@ -714,41 +952,55 @@ function update(deltaSeconds: number) {
 
   const prevPos = { ...combine.position };
   combine.prevPosition = prevPos;
-
-  // Turning
-  const steer = (left ? -1 : 0) + (right ? 1 : 0);
-  if (steer !== 0) {
-    const turnRate = TURN_SPEED_RAD_PER_SEC * (turnEaseTimer > 0 ? TURN_EASE_MULTIPLIER : 1);
-    combine.angle += steer * turnRate * deltaSeconds;
-  }
-
-  // Forward/back movement along heading
-  let moveAmount = 0;
-  if (up) moveAmount += 1;
-  if (down) moveAmount -= 1;
-
   let moving = false;
-  if (moveAmount !== 0) {
-    moving = true;
-    const speed = COMBINE_SPEED_PPS * (moveAmount > 0 ? 1 : REVERSE_SPEED_FACTOR);
-    const forward = { x: Math.cos(combine.angle), y: Math.sin(combine.angle) };
-    combine.position.x += forward.x * speed * deltaSeconds * Math.sign(moveAmount);
-    combine.position.y += forward.y * speed * deltaSeconds * Math.sign(moveAmount);
-    combine.position.x = clamp(combine.position.x, -WORLD_MARGIN, FIELD_WIDTH + WORLD_MARGIN);
-    combine.position.y = clamp(combine.position.y, -WORLD_MARGIN, FIELD_HEIGHT + WORLD_MARGIN);
-  }
+  let harvestingActive = false;
 
-  // Harvesting and resources
-  const harvestResult = sweepHarvest(simDeltaMinutes, prevPos, combine.position);
-  const harvestingActive = harvestResult.harvestedSamples > 0 && combine.headerActive && !harvestBlocked();
-  updateBattery(simDeltaMinutes, harvestingActive, moving && !harvestingActive);
+  if (!swapActive) {
+    // Turning
+    const steer = (left ? -1 : 0) + (right ? 1 : 0);
+    if (steer !== 0) {
+      const turnRate = TURN_SPEED_RAD_PER_SEC * (turnEaseTimer > 0 ? TURN_EASE_MULTIPLIER : 1);
+      combine.angle += steer * turnRate * deltaSeconds;
+    }
 
-  // Tractor and tank enforcement
-  if (harvestBlocked()) {
+    // Forward/back movement along heading
+    let moveAmount = 0;
+    if (up) moveAmount += 1;
+    if (down) moveAmount -= 1;
+
+    if (moveAmount !== 0) {
+      moving = true;
+      const speed = COMBINE_SPEED_PPS * (moveAmount > 0 ? 1 : REVERSE_SPEED_FACTOR);
+      const forward = { x: Math.cos(combine.angle), y: Math.sin(combine.angle) };
+      combine.position.x += forward.x * speed * deltaSeconds * Math.sign(moveAmount);
+      combine.position.y += forward.y * speed * deltaSeconds * Math.sign(moveAmount);
+      combine.position.x = clamp(combine.position.x, -WORLD_MARGIN, FIELD_WIDTH + WORLD_MARGIN);
+      combine.position.y = clamp(combine.position.y, -WORLD_MARGIN, FIELD_HEIGHT + WORLD_MARGIN);
+    }
+
+    // Harvesting and resources
+    const harvestResult = sweepHarvest(simDeltaMinutes, prevPos, combine.position);
+    harvestingActive = harvestResult.harvestedSamples > 0 && combine.headerActive && !harvestBlocked();
+    updateBattery(simDeltaMinutes, harvestingActive, moving && !harvestingActive);
+
+    // Tractor and tank enforcement
+    if (harvestBlocked()) {
+      combine.headerActive = false;
+      statusMessage = "Tank full – harvesting paused. Call tractor.";
+    }
+  } else {
     combine.headerActive = false;
-    statusMessage = "Tank full – harvesting paused. Call tractor.";
   }
+
   updateTractor(simDeltaMinutes);
+
+  const batteryPct = batteryPercent();
+  if (!batterySwap.active && batteryPct <= BATTERY_SWAP_TRIGGER_PERCENT) {
+    batteryLowPrompted = true;
+  }
+  if (!batterySwap.active && batteryLowPrompted && isInBatteryZone(combine.position)) {
+    startBatterySwap();
+  }
 
   // End condition
   if (harvestedTiles >= TOTAL_TILES) {
@@ -789,6 +1041,7 @@ function render() {
     }
   }
 
+  drawBatteryZone(camX, camY, performance.now());
   drawMarkers(camX, camY, performance.now());
   drawTractor(camX, camY);
   drawCombine(camX, camY);
