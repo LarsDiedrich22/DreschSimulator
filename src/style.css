@@ -128,6 +128,28 @@ canvas#game {
   line-height: 1.5;
 }
 
+.controls {
+  position: fixed;
+  top: 220px;
+  left: 14px;
+  width: 240px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.controls-title {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.controls ul {
+  margin: 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 4px;
+}
+
 .overlay {
   position: fixed;
   inset: 0;

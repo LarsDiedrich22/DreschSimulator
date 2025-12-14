@@ -10,46 +10,55 @@
     <div id="app">
       <canvas id="game"></canvas>
       <div class="hud panel">
-        <div class="hud-row"><span class="label">Field</span><span id="field-progress">0 %</span></div>
+        <div class="hud-row"><span class="label">Feld</span><span id="field-progress">0 %</span></div>
         <div class="hud-row"><span class="label">Tank</span><span id="tank-level">0 %</span></div>
-        <div class="hud-row small"><span class="label">Tank full in</span><span id="tank-timer">--</span></div>
-        <div class="hud-row"><span class="label">Battery</span><span id="battery-level">100 %</span></div>
-        <div class="hud-row small"><span class="label">Consumption</span><span id="consumption-state">Idle</span></div>
-        <div class="hud-row"><span class="label">Time</span><span id="time-display">00:00 / 00:00 sim</span></div>
-        <div class="hud-row small"><span class="label">Tractor</span><span id="tractor-status">Idle</span></div>
-        <div class="hud-row small"><span class="label">Status</span><span id="status-message">Ready</span></div>
+        <div class="hud-row small"><span class="label">Tank voll in</span><span id="tank-timer">--</span></div>
+        <div class="hud-row"><span class="label">Batterie</span><span id="battery-level">100 %</span></div>
+        <div class="hud-row small"><span class="label">Verbrauch</span><span id="consumption-state">Leerlauf</span></div>
+        <div class="hud-row"><span class="label">Zeit</span><span id="time-display">00:00 / 00:00 Sim</span></div>
+        <div class="hud-row small"><span class="label">Traktor</span><span id="tractor-status">Leerlauf</span></div>
+        <div class="hud-row small"><span class="label">Status</span><span id="status-message">Bereit</span></div>
       </div>
       <div class="swap-log panel">
         <div class="swap-header">
-          <div>Hypothetical swaps</div>
+          <div>Hypothetische Wechsel</div>
           <div class="swap-actions">
-            <button id="export-log">Export CSV</button>
-            <button id="toggle-log">Hide</button>
+            <button id="export-log">CSV exportieren</button>
+            <button id="toggle-log">Ausblenden</button>
           </div>
         </div>
         <div id="swap-list" class="swap-list"></div>
+      </div>
+      <div class="controls panel" id="controls-panel">
+        <div class="controls-title">Tastenbefehle</div>
+        <ul>
+          <li>WASD / Pfeile – Fahren</li>
+          <li>Leertaste – Schneidwerk ein/aus</li>
+          <li>T – Traktor rufen</li>
+          <li>B – Batteriewechsel während der Fahrt</li>
+        </ul>
       </div>
       <div id="messages" class="messages panel"></div>
       <div id="tutorial" class="overlay">
         <div class="overlay-card">
           <h1>Mähdresch Simulator</h1>
-          <p>10-minute real-time harvest. Battery is informational; swap markers log intent.</p>
+          <p>10-minütige Ernte in Echtzeit.</p>
           <ul>
-            <li>Move: WASD / Arrow keys</li>
-            <li>Header: Space</li>
-            <li>Call tractor: T</li>
-            <li>Mark swap: B</li>
+            <li>Fahren: WASD / Pfeiltasten</li>
+            <li>Schneidwerk: Leertaste</li>
+            <li>Traktor rufen: T</li>
+            <li>Batteriewechsel während der Fahrt: B</li>
           </ul>
-          <p class="note">Header works only in crop. Tank full pauses harvesting until unloaded.</p>
-          <button id="start-button">Start harvesting</button>
+          <p class="note">Das Schneidwerk funktioniert nur im Bestand. Ist der Tank voll, wird die Ernte bis zum Entladen pausiert.</p>
+          <button id="start-button">Ernte starten</button>
         </div>
       </div>
       <div id="end-screen" class="overlay hidden">
         <div class="overlay-card">
-          <h2>Harvest complete</h2>
+          <h2>Ernte abgeschlossen</h2>
           <div id="end-summary"></div>
           <div id="end-log" class="end-log"></div>
-          <button id="restart-button">Restart</button>
+          <button id="restart-button">Neu starten</button>
         </div>
       </div>
     </div>
