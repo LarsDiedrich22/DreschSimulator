@@ -74,14 +74,15 @@ if (combineImage.complete) combineImageReady = true;
 
 // Constants based on the design document
 const TILE_SIZE = 8; // px
-const METERS_PER_TILE = 2;
+const METERS_PER_TILE = 0.01; // 1 cm per tile for the 70 cm field
 const PIXELS_PER_METER = TILE_SIZE / METERS_PER_TILE;
-const FIELD_WIDTH_TILES = 200;
-const FIELD_HEIGHT_TILES = 200;
+const FIELD_WIDTH_TILES = 70; // 70 cm length
+const FIELD_HEIGHT_TILES = 70; // 70 cm width
 const FIELD_WIDTH = FIELD_WIDTH_TILES * TILE_SIZE;
 const FIELD_HEIGHT = FIELD_HEIGHT_TILES * TILE_SIZE;
 const TOTAL_TILES = FIELD_WIDTH_TILES * FIELD_HEIGHT_TILES;
-const TON_PER_TILE = (9 / 10000) * (METERS_PER_TILE * METERS_PER_TILE); // 9 t/ha yield
+const HARVEST_YIELD_SCALE = 10000; // keep tank movement visible on the mini 70 cm field
+const TON_PER_TILE = (9 / 10000) * (METERS_PER_TILE * METERS_PER_TILE) * HARVEST_YIELD_SCALE; // 9 t/ha yield, scaled up
 
 const SIM_SECONDS_PER_REAL_SECOND = 4;
 const REAL_TIME_LIMIT_SECONDS = 10 * 60;
@@ -91,8 +92,9 @@ const HEADER_DEPTH_TILES = 3.5;
 const HEADER_OFFSET = TILE_SIZE * 4;
 const HEADER_VISUAL_SHIFT_TILES = 3; // push visible cutter forward
 
-const COMBINE_SPEED_MPS = 8.5; // tuned for larger header and feel
-const COMBINE_SPEED_PPS = COMBINE_SPEED_MPS * PIXELS_PER_METER;
+const TARGET_COMBINE_SPEED_PPS = 34; // keep prior on-screen speed with the smaller 70 cm field
+const COMBINE_SPEED_MPS = TARGET_COMBINE_SPEED_PPS / PIXELS_PER_METER;
+const COMBINE_SPEED_PPS = TARGET_COMBINE_SPEED_PPS;
 const COMBINE_SIZE = { w: 140, h: 220 }; // scaled for sprite
 const WORLD_MARGIN = 400; // allow driving beyond field
 const TURN_SPEED_DEG_PER_SEC = 120; // smoother turning
@@ -117,9 +119,9 @@ const TRACTOR_LEAVE_SIM_MIN = 1.5;
 const TRACTOR_OFFSET = 70;
 const TRAILER_CAPACITY = 20; // t visual only
 
-// Replacement pad sits left of the starting position, just outside the field
-const COMBINE_START: Vec2 = { x: 0, y: FIELD_HEIGHT * 0.5 };
-const BATTERY_ZONE_POSITION: Vec2 = { x: COMBINE_START.x - 220, y: COMBINE_START.y - 40 };
+// Start below the field, centered horizontally, outside the crop
+const COMBINE_START: Vec2 = { x: FIELD_WIDTH * 0.5, y: FIELD_HEIGHT + 120 };
+const BATTERY_ZONE_POSITION: Vec2 = { x: FIELD_WIDTH * 0.5, y: FIELD_HEIGHT + 220 };
 const BATTERY_ZONE_RADIUS = 140;
 const BATTERY_SWAP_TRIGGER_PERCENT = 20;
 const BATTERY_SWAP_DURATION_SECONDS = 30;
@@ -136,7 +138,7 @@ let harvestedTiles = 0;
 const combine = {
   position: { ...COMBINE_START },
   prevPosition: { ...COMBINE_START },
-  angle: 0,
+  angle: -Math.PI / 2, // face upward toward the field from the bottom start
   headerActive: false
 };
 
@@ -221,9 +223,9 @@ let lastAngleSnapshot = 0;
 function resetGame() {
   tiles = new Uint8Array(TOTAL_TILES);
   harvestedTiles = 0;
-  combine.position = { ...COMBINE_START }; // start on the field edge
+  combine.position = { ...COMBINE_START }; // start below the field
   combine.prevPosition = { ...combine.position };
-  combine.angle = 0;
+  combine.angle = -Math.PI / 2; // face upward toward the field from the bottom
   combine.headerActive = false;
   tank.current = 0;
   battery.current = BATTERY_CAPACITY_KWH;
@@ -704,7 +706,7 @@ function drawHud(now: number) {
   if (batterySwap.active) {
     messages.push(`${currentSwapMessage()} (${formatCountdown(batterySwap.remaining)})`);
   } else if (batteryPct <= BATTERY_SWAP_TRIGGER_PERCENT) {
-    messages.push("Battery at 20% — drive to the replacement zone left of the start point.");
+    messages.push("Battery at 20% — drive to the replacement zone below the start point.");
   }
   if (batteryPct <= 0) {
     messages.push("Battery would be empty in a real scenario (no swap performed).");
@@ -716,7 +718,7 @@ function drawHud(now: number) {
 function updateBatteryZonePanel(batteryPct: number) {
   const inZone = isInBatteryZone(combine.position);
   const awaitingSwap = batteryLowPrompted && !batterySwap.active;
-  batteryZoneStatusEl.textContent = inZone ? "Am Ersatzbereich" : "Links vom Startpunkt außerhalb des Felds";
+  batteryZoneStatusEl.textContent = inZone ? "Am Ersatzbereich" : "Unterhalb des Startpunkts außerhalb des Felds";
   if (batterySwap.active) {
     batteryZoneTimerEl.textContent = `${formatCountdown(batterySwap.remaining)} (${Math.ceil(batterySwap.remaining)} s)`;
     batteryZoneMessageEl.textContent = currentSwapMessage();
@@ -726,7 +728,7 @@ function updateBatteryZonePanel(batteryPct: number) {
     if (awaitingSwap && inZone) {
       batteryZoneMessageEl.textContent = "Stillstehen: Der Batteriewechsel startet jetzt automatisch.";
     } else if (batteryPct <= BATTERY_SWAP_TRIGGER_PERCENT) {
-      batteryZoneMessageEl.textContent = "Batterie bei 20 % – fahre zum markierten Pad links des Startpunkts.";
+      batteryZoneMessageEl.textContent = "Batterie bei 20 % – fahre zum markierten Pad unterhalb des Startpunkts.";
     } else {
       batteryZoneMessageEl.textContent = "Pad bereit für den nächsten Wechsel.";
     }
