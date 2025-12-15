@@ -92,7 +92,7 @@ const FIELD_HEIGHT = FIELD_HEIGHT_TILES * TILE_SIZE;  // 1400 px
 const TOTAL_TILES = FIELD_WIDTH_TILES * FIELD_HEIGHT_TILES;
 // yield model
 const YIELD_T_PER_HA = 9;              // 9 t/ha
-const HARVEST_YIELD_SCALE = 10000;     // keep tank movement visible at compact field scale
+const HARVEST_YIELD_SCALE = 22120;     // tuned so a fully harvested field yields ~3 full tank loads
 
 // derived
 const TONS_PER_M2 = YIELD_T_PER_HA / 10000;
@@ -433,12 +433,27 @@ function drawCombine(camX: number, camY: number) {
     ctx.fillRect(-COMBINE_SIZE.w / 2, -COMBINE_SIZE.h / 2, COMBINE_SIZE.w, COMBINE_SIZE.h);
   }
 
-  // Grain tank fill overlay
+  // Grain tank fill overlay with thirds markers (to track repeated unloads)
   const tankRatio = tankPercent() / 100;
-  ctx.fillStyle = "rgba(12,18,22,0.8)";
-  ctx.fillRect(-COMBINE_SIZE.w / 2 + 10, -COMBINE_SIZE.h / 2 - 16, COMBINE_SIZE.w - 20, 12);
+  const barWidth = COMBINE_SIZE.w - 20;
+  const barHeight = 12;
+  const barX = -COMBINE_SIZE.w / 2 + 10;
+  const barY = -COMBINE_SIZE.h / 2 - 16;
+  ctx.fillStyle = "rgba(12,18,22,0.85)";
+  ctx.fillRect(barX, barY, barWidth, barHeight);
   ctx.fillStyle = "#f9d54c";
-  ctx.fillRect(-COMBINE_SIZE.w / 2 + 10, -COMBINE_SIZE.h / 2 - 16, (COMBINE_SIZE.w - 20) * tankRatio, 12);
+  ctx.fillRect(barX, barY, barWidth * tankRatio, barHeight);
+  ctx.strokeStyle = "rgba(0,0,0,0.4)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(barX, barY, barWidth, barHeight);
+  // Third markers to hint at multiple unloads over the full field
+  ctx.strokeStyle = "rgba(255,255,255,0.35)";
+  ctx.beginPath();
+  ctx.moveTo(barX + barWidth / 3, barY);
+  ctx.lineTo(barX + barWidth / 3, barY + barHeight);
+  ctx.moveTo(barX + (barWidth * 2) / 3, barY);
+  ctx.lineTo(barX + (barWidth * 2) / 3, barY + barHeight);
+  ctx.stroke();
   ctx.restore();
 
   // Header overlay aligned with harvest footprint (world aligned)
