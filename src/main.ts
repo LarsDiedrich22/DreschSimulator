@@ -752,9 +752,9 @@ function updateBatteryZonePanel(batteryPct: number) {
     if (awaitingSwap && inZone) {
       batteryZoneMessageEl.textContent = "Stillstehen: Der Batteriewechsel startet jetzt automatisch.";
     } else if (batteryPct <= BATTERY_SWAP_TRIGGER_PERCENT) {
-      batteryZoneMessageEl.textContent = "Batterie bei 20 % – fahre zum markierten Pad rechts vom Startpunkt.";
+      batteryZoneMessageEl.textContent = "Batterie bei 20 % – fahre zur markierten Zone rechts vom Startpunkt.";
     } else {
-      batteryZoneMessageEl.textContent = "Pad bereit für den nächsten Wechsel.";
+      batteryZoneMessageEl.textContent = "Zone bereit für den nächsten Wechsel.";
     }
     batteryZonePanel.classList.toggle("attention", awaitingSwap || batteryPct <= BATTERY_SWAP_TRIGGER_PERCENT);
   }
