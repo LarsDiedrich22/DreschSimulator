@@ -73,26 +73,41 @@ combineImage.onload = () => {
 if (combineImage.complete) combineImageReady = true;
 
 // Constants based on the design document
-const TILE_SIZE = 8; // px
-const METERS_PER_TILE = 0.01; // 1 cm per tile for the 70 cm field
+// --- Scale (single source of truth) ---
+const FIELD_SIZE_CM = 140; // square field: 140 cm × 140 cm (4× area)
+const PIXELS_PER_CM = 10; // 10 px = 1 cm on screen
+const CM_PER_TILE = 1;    // 1 cm per tile for the wheat grid
+const TILE_SIZE = PIXELS_PER_CM * CM_PER_TILE; // 10 px per tile
+
+const FIELD_WIDTH_CM = FIELD_SIZE_CM;
+const FIELD_HEIGHT_CM = FIELD_SIZE_CM;
+
+const METERS_PER_TILE = CM_PER_TILE / 100;
 const PIXELS_PER_METER = TILE_SIZE / METERS_PER_TILE;
-const FIELD_WIDTH_TILES = 70; // 70 cm length
-const FIELD_HEIGHT_TILES = 70; // 70 cm width
-const FIELD_WIDTH = FIELD_WIDTH_TILES * TILE_SIZE;
-const FIELD_HEIGHT = FIELD_HEIGHT_TILES * TILE_SIZE;
+
+const FIELD_WIDTH_TILES = Math.round(FIELD_WIDTH_CM / CM_PER_TILE);   // 140 tiles
+const FIELD_HEIGHT_TILES = Math.round(FIELD_HEIGHT_CM / CM_PER_TILE); // 140 tiles
+const FIELD_WIDTH = FIELD_WIDTH_TILES * TILE_SIZE;    // 1400 px
+const FIELD_HEIGHT = FIELD_HEIGHT_TILES * TILE_SIZE;  // 1400 px
 const TOTAL_TILES = FIELD_WIDTH_TILES * FIELD_HEIGHT_TILES;
-const HARVEST_YIELD_SCALE = 10000; // keep tank movement visible on the mini 70 cm field
-const TON_PER_TILE = (9 / 10000) * (METERS_PER_TILE * METERS_PER_TILE) * HARVEST_YIELD_SCALE; // 9 t/ha yield, scaled up
+// yield model
+const YIELD_T_PER_HA = 9;              // 9 t/ha
+const HARVEST_YIELD_SCALE = 10000;     // keep tank movement visible at compact field scale
+
+// derived
+const TONS_PER_M2 = YIELD_T_PER_HA / 10000;
+const TON_PER_TILE = TONS_PER_M2 * (METERS_PER_TILE * METERS_PER_TILE) * HARVEST_YIELD_SCALE;
+// 9 t/ha yield, scaled up
 
 const SIM_SECONDS_PER_REAL_SECOND = 4;
 const REAL_TIME_LIMIT_SECONDS = 10 * 60;
 
-const HEADER_WIDTH_TILES = 14; // trimmed cutter width by two tiles from 16
-const HEADER_DEPTH_TILES = 3.5;
-const HEADER_OFFSET = TILE_SIZE * 4;
-const HEADER_VISUAL_SHIFT_TILES = 3; // push visible cutter forward
+const HEADER_WIDTH_TILES = 10 / CM_PER_TILE; // cutting width reduced by 4 tiles
+const HEADER_DEPTH_TILES = 3.5 / CM_PER_TILE;
+const HEADER_OFFSET = TILE_SIZE * (4 / CM_PER_TILE);
+const HEADER_VISUAL_SHIFT_TILES = 3 / CM_PER_TILE; // push visible cutter forward
 
-const TARGET_COMBINE_SPEED_PPS = 34; // keep prior on-screen speed with the smaller 70 cm field
+const TARGET_COMBINE_SPEED_PPS = 34; // keep on-screen speed consistent on the larger field
 const COMBINE_SPEED_MPS = TARGET_COMBINE_SPEED_PPS / PIXELS_PER_METER;
 const COMBINE_SPEED_PPS = TARGET_COMBINE_SPEED_PPS;
 const COMBINE_SIZE = { w: 140, h: 220 }; // scaled for sprite
@@ -121,7 +136,7 @@ const TRAILER_CAPACITY = 20; // t visual only
 
 // Start below the field, centered horizontally, outside the crop
 const COMBINE_START: Vec2 = { x: FIELD_WIDTH * 0.5, y: FIELD_HEIGHT + 120 };
-const BATTERY_ZONE_POSITION: Vec2 = { x: FIELD_WIDTH * 0.5, y: FIELD_HEIGHT + 220 };
+const BATTERY_ZONE_POSITION: Vec2 = { x: FIELD_WIDTH * 0.5 + 280, y: FIELD_HEIGHT + 220 }; // shifted further right of start
 const BATTERY_ZONE_RADIUS = 140;
 const BATTERY_SWAP_TRIGGER_PERCENT = 20;
 const BATTERY_SWAP_DURATION_SECONDS = 30;
@@ -597,18 +612,12 @@ function drawBatteryBlock(x: number, y: number, scale = 1) {
   ctx.fillStyle = "#c8d0da";
   ctx.fillRect(-width / 2 + 8 * scale, -height / 2 - 4 * scale, 12 * scale, 6 * scale);
   ctx.fillRect(width / 2 - 20 * scale, -height / 2 - 4 * scale, 12 * scale, 6 * scale);
-  ctx.fillStyle = "#50ee86";
-  ctx.beginPath();
-  ctx.moveTo(-6 * scale, -4 * scale);
-  ctx.lineTo(0, -14 * scale);
-  ctx.lineTo(8 * scale, -4 * scale);
-  ctx.lineTo(2 * scale, 12 * scale);
-  ctx.lineTo(-6 * scale, 4 * scale);
-  ctx.closePath();
-  ctx.fill();
-  ctx.font = `${10 * scale}px "Inter", "Segoe UI", system-ui, sans-serif`;
+  // Label: centered on the battery
+  ctx.font = `bold ${11 * scale}px "Inter", "Segoe UI", system-ui, sans-serif`;
+  ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText("Battery", -width / 2 + 10 * scale, height / 2 - 8 * scale);
+  ctx.fillStyle = "#e9eef4";
+  ctx.fillText("Batterie", 0, 0);
   ctx.restore();
 }
 
@@ -650,7 +659,7 @@ function drawBatteryZone(camX: number, camY: number, now: number) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = `rgba(80, 238, 134, ${0.5 + pulse * 0.35})`;
-  ctx.fillText("Battery Pad", 0, -BATTERY_ZONE_RADIUS + 24);
+  ctx.fillText("Batterie Wechselzone", 0, -BATTERY_ZONE_RADIUS + 24);
 
   // Spare batteries
   drawBatteryBlock(92, -30, 0.9);
@@ -706,7 +715,7 @@ function drawHud(now: number) {
   if (batterySwap.active) {
     messages.push(`${currentSwapMessage()} (${formatCountdown(batterySwap.remaining)})`);
   } else if (batteryPct <= BATTERY_SWAP_TRIGGER_PERCENT) {
-    messages.push("Battery at 20% — drive to the replacement zone below the start point.");
+    messages.push("Battery at 20% — drive to the replacement zone to the right of the start point.");
   }
   if (batteryPct <= 0) {
     messages.push("Battery would be empty in a real scenario (no swap performed).");
@@ -718,7 +727,7 @@ function drawHud(now: number) {
 function updateBatteryZonePanel(batteryPct: number) {
   const inZone = isInBatteryZone(combine.position);
   const awaitingSwap = batteryLowPrompted && !batterySwap.active;
-  batteryZoneStatusEl.textContent = inZone ? "Am Ersatzbereich" : "Unterhalb des Startpunkts außerhalb des Felds";
+  batteryZoneStatusEl.textContent = inZone ? "Am Ersatzbereich" : "Rechts vom Startpunkt außerhalb des Felds";
   if (batterySwap.active) {
     batteryZoneTimerEl.textContent = `${formatCountdown(batterySwap.remaining)} (${Math.ceil(batterySwap.remaining)} s)`;
     batteryZoneMessageEl.textContent = currentSwapMessage();
@@ -728,7 +737,7 @@ function updateBatteryZonePanel(batteryPct: number) {
     if (awaitingSwap && inZone) {
       batteryZoneMessageEl.textContent = "Stillstehen: Der Batteriewechsel startet jetzt automatisch.";
     } else if (batteryPct <= BATTERY_SWAP_TRIGGER_PERCENT) {
-      batteryZoneMessageEl.textContent = "Batterie bei 20 % – fahre zum markierten Pad unterhalb des Startpunkts.";
+      batteryZoneMessageEl.textContent = "Batterie bei 20 % – fahre zum markierten Pad rechts vom Startpunkt.";
     } else {
       batteryZoneMessageEl.textContent = "Pad bereit für den nächsten Wechsel.";
     }
