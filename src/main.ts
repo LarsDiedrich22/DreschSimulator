@@ -48,10 +48,6 @@ const consumptionStateEl = document.getElementById("consumption-state")!;
 const timeDisplayEl = document.getElementById("time-display")!;
 const tractorStatusEl = document.getElementById("tractor-status")!;
 const statusMessageEl = document.getElementById("status-message")!;
-const messagesEl = document.getElementById("messages")!;
-const swapListEl = document.getElementById("swap-list")!;
-const toggleLogBtn = document.getElementById("toggle-log") as HTMLButtonElement;
-const exportLogBtn = document.getElementById("export-log") as HTMLButtonElement;
 const tutorialOverlay = document.getElementById("tutorial")!;
 const startButton = document.getElementById("start-button") as HTMLButtonElement;
 const endScreen = document.getElementById("end-screen")!;
@@ -62,6 +58,7 @@ const batteryZonePanel = document.getElementById("battery-zone-panel") as HTMLEl
 const batteryZoneStatusEl = document.getElementById("battery-zone-status")!;
 const batteryZoneTimerEl = document.getElementById("battery-zone-timer")!;
 const batteryZoneMessageEl = document.getElementById("battery-zone-message")!;
+const batteryAlertEl = document.getElementById("battery-alert") as HTMLElement;
 
 // Combine sprite
 const combineImage = new Image();
@@ -138,7 +135,7 @@ const TRAILER_CAPACITY = 20; // t visual only
 const COMBINE_START: Vec2 = { x: FIELD_WIDTH * 0.5, y: FIELD_HEIGHT + 120 };
 const BATTERY_ZONE_POSITION: Vec2 = { x: FIELD_WIDTH * 0.5 + 280, y: FIELD_HEIGHT + 220 }; // shifted further right of start
 const BATTERY_ZONE_RADIUS = 140;
-const BATTERY_SWAP_TRIGGER_PERCENT = 20;
+const BATTERY_SWAP_TRIGGER_PERCENT = 30;
 const BATTERY_SWAP_DURATION_SECONDS = 30;
 const BATTERY_SWAP_MESSAGES = [
   "Replacing the previous battery.",
@@ -186,7 +183,6 @@ let unloadCount = 0;
 
 let swapEvents: SwapEvent[] = [];
 let markers: SwapMarker[] = [];
-let swapCounter = 0;
 
 const batterySwap = {
   active: false,
@@ -255,7 +251,6 @@ function resetGame() {
   tractor.sideMultiplier = 1;
   tractorCalls = 0;
   unloadCount = 0;
-  swapCounter = 0;
   swapEvents = [];
   markers = [];
   batterySwap.active = false;
@@ -272,7 +267,6 @@ function resetGame() {
   turnEaseTimer = 0;
   lastAngleSnapshot = combine.angle;
   statusMessage = "Ready";
-  updateSwapList();
   hideOverlay(endScreen);
 }
 
@@ -726,16 +720,13 @@ function drawHud(now: number) {
   timeDisplayEl.textContent = `${formatTime(elapsedRealSeconds)} / ${formatSimTime(elapsedSimSeconds)}`;
   tractorStatusEl.textContent = tractorStatusText();
   statusMessageEl.textContent = statusMessage;
-  const messages: string[] = [];
+  let alertMessage: string | null = null;
   if (batterySwap.active) {
-    messages.push(`${currentSwapMessage()} (${formatCountdown(batterySwap.remaining)})`);
+    alertMessage = `${currentSwapMessage()} (${formatCountdown(batterySwap.remaining)})`;
   } else if (batteryPct <= BATTERY_SWAP_TRIGGER_PERCENT) {
-    messages.push("Battery at 20% — drive to the replacement zone to the right of the start point.");
+    alertMessage = `Batterie bei ${BATTERY_SWAP_TRIGGER_PERCENT} % – fahre zur Wechselzone rechts vom Startpunkt.`;
   }
-  if (batteryPct <= 0) {
-    messages.push("Battery would be empty in a real scenario (no swap performed).");
-  }
-  messagesEl.innerHTML = messages.join("<br>");
+  setBatteryAlert(alertMessage);
   updateBatteryZonePanel(batteryPct);
 }
 
@@ -752,7 +743,7 @@ function updateBatteryZonePanel(batteryPct: number) {
     if (awaitingSwap && inZone) {
       batteryZoneMessageEl.textContent = "Stillstehen: Der Batteriewechsel startet jetzt automatisch.";
     } else if (batteryPct <= BATTERY_SWAP_TRIGGER_PERCENT) {
-      batteryZoneMessageEl.textContent = "Batterie bei 20 % – fahre zur markierten Zone rechts vom Startpunkt.";
+      batteryZoneMessageEl.textContent = "Batterie bei 30 % – fahre zur markierten Zone rechts vom Startpunkt.";
     } else {
       batteryZoneMessageEl.textContent = "Zone bereit für den nächsten Wechsel.";
     }
@@ -803,49 +794,14 @@ function formatCountdown(seconds: number) {
   return `${String(mins).padStart(2, "0")}:${String(rem).padStart(2, "0")}`;
 }
 
-function updateSwapList() {
-  swapListEl.innerHTML = "";
-  swapEvents.slice(-10).forEach((event) => {
-    const div = document.createElement("div");
-    div.className = "swap-entry";
-    const real = formatTime(event.realSeconds);
-    const sim = formatSimTime(event.simSeconds);
-    div.innerHTML = `#${event.id} – ${sim} / ${real}<br>SoC ${event.battery.toFixed(0)} % · Tank ${event.tank.toFixed(0)} % · Field ${event.field.toFixed(0)} %`;
-    swapListEl.appendChild(div);
-  });
-  if (swapEvents.length > 10) {
-    const note = document.createElement("div");
-    note.className = "swap-entry";
-    note.textContent = `+ ${swapEvents.length - 10} older entries`;
-    swapListEl.appendChild(note);
-  }
-}
-
-function exportLogToCsv() {
-  if (swapEvents.length === 0) {
-    statusMessage = "No swap markers to export.";
+function setBatteryAlert(message: string | null) {
+  if (!message) {
+    batteryAlertEl.classList.remove("visible");
+    batteryAlertEl.textContent = "";
     return;
   }
-  const header = "id,real_time,sim_time,x,y,battery_percent,tank_percent,field_percent,tractor_nearby";
-  const rows = swapEvents.map((event) => {
-    const real = formatTime(event.realSeconds);
-    const sim = formatSimTime(event.simSeconds);
-    const tractorFlag = event.tractorNearby ? "yes" : "no";
-    return `${event.id},${real},${sim},${event.x.toFixed(1)},${event.y.toFixed(1)},${event.battery.toFixed(1)},${event.tank.toFixed(1)},${event.field.toFixed(1)},${tractorFlag}`;
-  });
-  const csv = [header, ...rows].join("\n");
-  downloadFile("swap_log.csv", csv, "text/csv");
-  statusMessage = "Swap log exported.";
-}
-
-function downloadFile(filename: string, content: string, mime: string) {
-  const blob = new Blob([content], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  batteryAlertEl.textContent = message;
+  batteryAlertEl.classList.add("visible");
 }
 
 function updateTractor(simDeltaMinutes: number) {
@@ -1188,13 +1144,6 @@ window.addEventListener("keyup", (e) => {
 
 startButton.addEventListener("click", () => startGame());
 restartButton.addEventListener("click", () => startGame());
-
-toggleLogBtn.addEventListener("click", () => {
-  const hidden = swapListEl.style.display === "none";
-  swapListEl.style.display = hidden ? "flex" : "none";
-  toggleLogBtn.textContent = hidden ? "Hide" : "Show";
-});
-exportLogBtn.addEventListener("click", () => exportLogToCsv());
 
 resetGame();
 loop(performance.now());

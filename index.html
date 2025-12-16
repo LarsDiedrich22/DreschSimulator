@@ -11,7 +11,7 @@
       <canvas id="game"></canvas>
       <div class="hud panel">
         <div class="hud-row"><span class="label">Feld</span><span id="field-progress">0 %</span></div>
-        <div class="hud-row"><span class="label">Tank</span><span id="tank-level">0 %</span></div>
+        <div class="hud-row"><span class="label">Getreidetank</span><span id="tank-level">0 %</span></div>
         <div class="hud-row small"><span class="label">Tank voll in</span><span id="tank-timer">--</span></div>
         <div class="hud-row"><span class="label">Batterie</span><span id="battery-level">100 %</span></div>
         <div class="hud-row small"><span class="label">Verbrauch</span><span id="consumption-state">Leerlauf</span></div>
@@ -19,32 +19,24 @@
         <div class="hud-row small"><span class="label">Traktor</span><span id="tractor-status">Leerlauf</span></div>
         <div class="hud-row small"><span class="label">Status</span><span id="status-message">Bereit</span></div>
       </div>
-      <div class="swap-log panel">
-        <div class="swap-header">
-          <div>Hypothetische Wechsel</div>
-          <div class="swap-actions">
-            <button id="export-log">CSV exportieren</button>
-            <button id="toggle-log">Ausblenden</button>
-          </div>
+      <div class="left-stack">
+        <div class="controls panel" id="controls-panel">
+          <div class="controls-title">Tastenbefehle</div>
+          <ul>
+            <li>WASD / Pfeile – Fahren</li>
+            <li>Leertaste – Schneidwerk ein/aus</li>
+            <li>T – Traktor rufen</li>
+            <li>B – Batteriewechsel während der Fahrt</li>
+          </ul>
         </div>
-        <div id="swap-list" class="swap-list"></div>
+        <div id="battery-zone-panel" class="battery-zone panel">
+          <div class="battery-zone-title">Batteriewechsel-Zone</div>
+          <div class="battery-zone-row"><span class="label">Status: </span><span id="battery-zone-status">Bereit</span></div>
+          <div class="battery-zone-row"><span class="label">Timer</span><span id="battery-zone-timer">--</span></div>
+          <div id="battery-zone-message" class="battery-zone-message">Fahre zum Landeplatz unterhalb des Startpunkts.</div>
+        </div>
       </div>
-      <div class="controls panel" id="controls-panel">
-        <div class="controls-title">Tastenbefehle</div>
-        <ul>
-          <li>WASD / Pfeile – Fahren</li>
-          <li>Leertaste – Schneidwerk ein/aus</li>
-          <li>T – Traktor rufen</li>
-          <li>B – Batteriewechsel während der Fahrt</li>
-        </ul>
-      </div>
-      <div id="messages" class="messages panel"></div>
-      <div id="battery-zone-panel" class="battery-zone panel">
-        <div class="battery-zone-title">Batteriewechsel-Zone</div>
-        <div class="battery-zone-row"><span class="label">Status: </span><span id="battery-zone-status">Bereit</span></div>
-        <div class="battery-zone-row"><span class="label">Timer</span><span id="battery-zone-timer">--</span></div>
-        <div id="battery-zone-message" class="battery-zone-message">Fahre zum Landeplatz unterhalb des Startpunkts.</div>
-      </div>
+      <div id="battery-alert" class="battery-alert panel"></div>
       <div id="tutorial" class="overlay">
         <div class="overlay-card">
           <h1>Mähdresch Simulator</h1>
