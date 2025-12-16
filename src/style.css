@@ -74,28 +74,12 @@ canvas#game {
   display: flex;
   flex-direction: column-reverse;
   gap: 12px;
-  width: 260px;
-}
-
-.battery-alert {
-  position: fixed;
-  left: 14px;
-  top: 230px;
-  min-width: 280px;
-  padding: 14px 16px;
-  font-size: 14px;
-  line-height: 1.5;
-  display: none;
-  border-left: 3px solid #50ee86;
-}
-
-.battery-alert.visible {
-  display: block;
+  width: 360px;
 }
 
 .battery-zone {
   width: 100%;
-  padding: 12px;
+  padding: 14px 16px;
   display: grid;
   gap: 6px;
   border-left: 3px solid transparent;
@@ -121,6 +105,28 @@ canvas#game {
   font-size: 12px;
   line-height: 1.4;
   color: #b1c6d8;
+}
+
+.battery-warning {
+  color: #f39c3d;
+  font-weight: 800;
+  font-size: 15px;
+}
+
+.flash-warning {
+  animation: warning-flash 0.3s ease-in-out 3;
+}
+
+@keyframes warning-flash {
+  0% { opacity: 1; }
+  50% { opacity: 0.2; }
+  100% { opacity: 1; }
+}
+
+.success-text {
+  color: #50ee86;
+  font-weight: 800;
+  font-size: 16px;
 }
 
 .controls {

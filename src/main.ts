@@ -58,7 +58,6 @@ const batteryZonePanel = document.getElementById("battery-zone-panel") as HTMLEl
 const batteryZoneStatusEl = document.getElementById("battery-zone-status")!;
 const batteryZoneTimerEl = document.getElementById("battery-zone-timer")!;
 const batteryZoneMessageEl = document.getElementById("battery-zone-message")!;
-const batteryAlertEl = document.getElementById("battery-alert") as HTMLElement;
 
 // Combine sprite
 const combineImage = new Image();
@@ -135,12 +134,12 @@ const TRAILER_CAPACITY = 20; // t visual only
 const COMBINE_START: Vec2 = { x: FIELD_WIDTH * 0.5, y: FIELD_HEIGHT + 120 };
 const BATTERY_ZONE_POSITION: Vec2 = { x: FIELD_WIDTH * 0.5 + 280, y: FIELD_HEIGHT + 220 }; // shifted further right of start
 const BATTERY_ZONE_RADIUS = 140;
-const BATTERY_SWAP_TRIGGER_PERCENT = 30;
-const BATTERY_SWAP_DURATION_SECONDS = 30;
+const BATTERY_SWAP_TRIGGER_PERCENT = 35;
+const BATTERY_SWAP_DURATION_SECONDS = 20;
 const BATTERY_SWAP_MESSAGES = [
-  "Replacing the previous battery.",
-  "Empty battery is being removed",
-  "New battery is being inserted."
+  "Vorherige Batterie wird entnommen.",
+  "Leere Batterie wird entfernt.",
+  "Neue Batterie wird eingesetzt."
 ];
 
 
@@ -193,6 +192,8 @@ const batterySwap = {
 };
 
 let batteryLowPrompted = false;
+let batteryZoneMessageOverride: { text: string; expiresAt: number } | null = null;
+let batteryWarningFlashed = false;
 const batteryCarrier = {
   active: false,
   position: { x: -200, y: -200 },
@@ -202,7 +203,7 @@ const batteryCarrier = {
 
 function requestBatteryCarrier() {
   if (batterySwap.active) {
-    statusMessage = "Battery swap already in progress.";
+    statusMessage = "Batteriewechsel läuft bereits.";
     return;
   }
   const tractorBusy = tractor.state !== "idle";
@@ -217,8 +218,8 @@ function requestBatteryCarrier() {
   };
   startBatterySwap("inline");
   statusMessage = tractorBusy
-    ? "Battery carrier arrived opposite the tractor."
-    : "On-the-move battery swap started.";
+    ? "Batteriewagen ist gegenüber dem Traktor angekommen."
+    : "Batteriewechsel während der Fahrt gestartet.";
 }
 
 const inputState: Record<string, boolean> = {};
@@ -720,32 +721,44 @@ function drawHud(now: number) {
   timeDisplayEl.textContent = `${formatTime(elapsedRealSeconds)} / ${formatSimTime(elapsedSimSeconds)}`;
   tractorStatusEl.textContent = tractorStatusText();
   statusMessageEl.textContent = statusMessage;
-  let alertMessage: string | null = null;
-  if (batterySwap.active) {
-    alertMessage = `${currentSwapMessage()} (${formatCountdown(batterySwap.remaining)})`;
-  } else if (batteryPct <= BATTERY_SWAP_TRIGGER_PERCENT) {
-    alertMessage = `Batterie bei ${BATTERY_SWAP_TRIGGER_PERCENT} % – fahre zur Wechselzone rechts vom Startpunkt.`;
-  }
-  setBatteryAlert(alertMessage);
-  updateBatteryZonePanel(batteryPct);
+  updateBatteryZonePanel(batteryPct, now);
 }
 
-function updateBatteryZonePanel(batteryPct: number) {
+function updateBatteryZonePanel(batteryPct: number, now: number) {
   const inZone = isInBatteryZone(combine.position);
   const awaitingSwap = batteryLowPrompted && !batterySwap.active;
+  const overrideActive = batteryZoneMessageOverride && now < batteryZoneMessageOverride.expiresAt;
+  if (batteryZoneMessageOverride && !overrideActive) {
+    batteryZoneMessageOverride = null;
+  }
+  if (batteryPct > BATTERY_SWAP_TRIGGER_PERCENT) {
+    batteryWarningFlashed = false;
+  }
   batteryZoneStatusEl.textContent = inZone ? "Am Ersatzbereich" : "Rechts vom Startpunkt außerhalb des Felds";
   if (batterySwap.active) {
     batteryZoneTimerEl.textContent = `${formatCountdown(batterySwap.remaining)} (${Math.ceil(batterySwap.remaining)} s)`;
     batteryZoneMessageEl.textContent = currentSwapMessage();
+    batteryZoneMessageEl.classList.remove("flash-warning");
     batteryZonePanel.classList.add("attention");
+  } else if (overrideActive && batteryZoneMessageOverride) {
+    batteryZoneTimerEl.textContent = "00:00";
+    batteryZoneMessageEl.innerHTML = batteryZoneMessageOverride.text;
+    batteryZoneMessageEl.classList.remove("flash-warning");
+    batteryZonePanel.classList.remove("attention");
   } else {
     batteryZoneTimerEl.textContent = "--";
     if (awaitingSwap && inZone) {
       batteryZoneMessageEl.textContent = "Stillstehen: Der Batteriewechsel startet jetzt automatisch.";
+      batteryZoneMessageEl.classList.remove("flash-warning");
     } else if (batteryPct <= BATTERY_SWAP_TRIGGER_PERCENT) {
-      batteryZoneMessageEl.textContent = "Batterie bei 30 % – fahre zur markierten Zone rechts vom Startpunkt.";
+      batteryZoneMessageEl.innerHTML = `<span class="battery-warning">${BATTERY_SWAP_TRIGGER_PERCENT} % Batteriestand – bitte Batterie wechseln.</span>`;
+      if (!batteryWarningFlashed) {
+        triggerBatteryWarningFlash();
+        batteryWarningFlashed = true;
+      }
     } else {
       batteryZoneMessageEl.textContent = "Zone bereit für den nächsten Wechsel.";
+      batteryZoneMessageEl.classList.remove("flash-warning");
     }
     batteryZonePanel.classList.toggle("attention", awaitingSwap || batteryPct <= BATTERY_SWAP_TRIGGER_PERCENT);
   }
@@ -794,14 +807,18 @@ function formatCountdown(seconds: number) {
   return `${String(mins).padStart(2, "0")}:${String(rem).padStart(2, "0")}`;
 }
 
-function setBatteryAlert(message: string | null) {
-  if (!message) {
-    batteryAlertEl.classList.remove("visible");
-    batteryAlertEl.textContent = "";
-    return;
-  }
-  batteryAlertEl.textContent = message;
-  batteryAlertEl.classList.add("visible");
+function setBatteryZoneSuccess(message: string) {
+  batteryZoneMessageOverride = {
+    text: `<span class="success-text">${message}</span>`,
+    expiresAt: performance.now() + 6000
+  };
+}
+
+function triggerBatteryWarningFlash() {
+  batteryZoneMessageEl.classList.remove("flash-warning");
+  // Force reflow to restart animation
+  void batteryZoneMessageEl.offsetWidth;
+  batteryZoneMessageEl.classList.add("flash-warning");
 }
 
 function updateTractor(simDeltaMinutes: number) {
@@ -913,8 +930,10 @@ function finishBatterySwap() {
   batterySwap.mode = "stationary";
   battery.current = battery.capacity;
   batteryLowPrompted = false;
+  batteryWarningFlashed = false;
   batteryCarrier.active = false;
-  statusMessage = "Battery replaced and ready.";
+  statusMessage = "Batteriewechsel erfolgreich abgeschlossen.";
+  setBatteryZoneSuccess("Batteriewechsel erfolgreich abgeschlossen.");
 }
 
 function currentSwapMessage() {
